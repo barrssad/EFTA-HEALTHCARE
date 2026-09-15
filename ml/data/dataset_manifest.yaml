@@ -1,0 +1,57 @@
+# Machine-readable dataset manifest for the EFTA research pipeline.
+# Generated from ml/data/dataset_registry.py — treat that file as the source
+# of truth; if this file and the registry ever disagree, the registry wins.
+# Values marked "unknown/TODO" have not been verified and must not be
+# treated as confirmed facts in the paper.
+
+datasets:
+  synthetic:
+    dataset_id: synthetic
+    name: Synthetic Known-Mechanism Tabular Data
+    role: construct-validity test
+    source: Generated in-repo (ml/data/synthetic_dataset.py)
+    source_url: "n/a (locally generated)"
+    license: "n/a"
+    sample_count_before_exclusions: 900
+    feature_count: 10
+    target_name: y
+    target_encoding: {0: negative_class, 1: positive_class}
+    class_names: [negative_class, positive_class]
+    ground_truth_relevant_features: [feature_0, feature_1, feature_2]
+    missingness: none
+    limitation: "Not clinical data; validates explanation-recovery methodology only."
+
+  heart_disease:
+    dataset_id: heart_disease
+    name: "UCI Heart Disease (Cleveland subset)"
+    role: healthcare benchmark 1
+    source: "UCI Machine Learning Repository, id=45, via ucimlrepo (Cleveland only)"
+    source_url: "https://archive.ics.uci.edu/dataset/45/heart+disease"
+    license: "unknown/TODO — verify on UCI dataset page before publication"
+    version_or_revision: "unknown/TODO — ucimlrepo has no fetch-time version string"
+    sample_count_before_exclusions: 303
+    feature_count: 13
+    target_name: "num (raw, 0-4) -> binary_target (constructed)"
+    target_encoding: {0: no_disease, 1: disease_present}
+    class_names: [no_disease, disease_present]
+    missingness: "'ca' and 'thal' columns contain source-encoded missing values ('?'); "
+      "exact count verified at load time by audit.py, not hardcoded here"
+    exclusions: "Cleveland records only; Hungary/Switzerland/VA Long Beach excluded by construction"
+    limitation: "Small (303 rows), collected late 1980s, single site, known data-quality issues."
+
+  wdbc:
+    dataset_id: wdbc
+    name: "Wisconsin Diagnostic Breast Cancer (WDBC)"
+    role: healthcare benchmark 2
+    source: "scikit-learn packaged dataset (sklearn.datasets.load_breast_cancer)"
+    source_url: "https://archive.ics.uci.edu/dataset/17/breast+cancer+wisconsin+diagnostic"
+    license: "CC BY 4.0 (per scikit-learn documentation)"
+    sample_count_before_exclusions: 569
+    feature_count: 30
+    target_name: target
+    target_encoding: {0: malignant, 1: benign}
+    class_names: [malignant, benign]
+    class_distribution: {malignant: 212, benign: 357}
+    missingness: none
+    limitation: "Diagnostic feature benchmark, not a deployment study; no demographic "
+      "attributes available for a real subgroup (G5) audit."

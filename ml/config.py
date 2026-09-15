@@ -11,6 +11,10 @@ CONFIG = {
     "faithfulness_drop_threshold": 0.20,
     "stability_threshold": 0.70,
     "random_forest_trees": 300,
+    "logistic_regression_C": 1.0,
+    "logistic_regression_max_iter": 2000,
+    "model_random_state": 0,
+    "random_forest_imbalance_ratio_threshold": 1.5,
 }
 
 if __name__ == "__main__":

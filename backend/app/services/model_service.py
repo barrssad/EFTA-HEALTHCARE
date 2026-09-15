@@ -11,8 +11,9 @@ ML_ROOT = PROJECT_ROOT / "ml"
 if str(ML_ROOT) not in sys.path:
     sys.path.insert(0, str(ML_ROOT))
 
-from data_loader import load_and_split, load_wisconsin_dataset  # noqa: E402
-from models import fit_calibrated_model  # noqa: E402
+from data.split_protocol import get_prepared_splits  # noqa: E402
+from data.unified_interface import load_dataset  # noqa: E402
+from models import fit_calibrated_model, requires_feature_scaling  # noqa: E402
 
 
 class ModelService:
@@ -23,8 +24,14 @@ class ModelService:
             raise ValueError("Unsupported model. Use logistic_regression or random_forest.")
         self.model_name = model_name
         self.seed = seed
-        self.X_raw, self.y_raw, self.feature_names, self.class_names = load_wisconsin_dataset()
-        self.splits = load_and_split(seed)
+        bundle = load_dataset("wdbc", seed=seed)
+        self.X_raw = bundle.X
+        self.y_raw = bundle.y
+        self.feature_names = bundle.feature_names
+        self.class_names = bundle.class_names
+        self.splits = get_prepared_splits(
+            bundle, seed=seed, scale_features=requires_feature_scaling(model_name)
+        )
         self.model = fit_calibrated_model(
             model_name,
             self.splits.X_train,
@@ -42,7 +49,7 @@ class ModelService:
         values = np.asarray(features, dtype=float).reshape(1, -1)
         if values.shape[1] != self.feature_count:
             raise ValueError(f"Expected {self.feature_count} features, received {values.shape[1]}.")
-        return self.splits.scaler.transform(values)[0]
+        return self.splits.preprocessing_pipeline.transform(values)[0]
 
     def predict_proba_scaled(self, scaled_features: np.ndarray) -> np.ndarray:
         return self.model.predict_proba(np.asarray(scaled_features).reshape(1, -1))[0]
@@ -51,18 +58,26 @@ class ModelService:
         if self.shap_explainer is None:
             from gates import default_shap_explainer
 
-            self.shap_explainer = default_shap_explainer(self.model, self.splits.X_train[:80])
+            self.shap_explainer = default_shap_explainer(
+                self.model,
+                self.splits.X_train[:80],
+                feature_names=self.feature_names,
+            )
         return self.shap_explainer
 
     def metadata(self) -> dict[str, Any]:
         return {
             "model_name": self.model_name,
-            "dataset": "scikit-learn Wisconsin Diagnostic Breast Cancer",
+            "dataset": "Wisconsin Diagnostic Breast Cancer (WDBC)",
             "feature_count": self.feature_count,
             "feature_names": self.feature_names,
             "class_names": self.class_names,
             "training_seed": self.seed,
-            "preprocessing": "StandardScaler fitted on the training split only, then applied to raw inference input.",
+            "preprocessing": (
+                "Median imputation and StandardScaler fitted on the training split only"
+                if self.model_name == "logistic_regression"
+                else "Median imputation where required, fitted on the training split only; no scaling"
+            ),
         }
 
 

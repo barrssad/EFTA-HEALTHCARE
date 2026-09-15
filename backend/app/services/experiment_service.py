@@ -46,7 +46,7 @@ def get_experiment_results() -> dict[str, Any]:
         "source": "ml/results/raw_results.csv and ml/results/comparison_table.md",
         "generated_by": "ml/experiments.py",
         "methodology": {
-            "dataset": "scikit-learn Wisconsin Diagnostic Breast Cancer",
+            "dataset": "Wisconsin Diagnostic Breast Cancer (WDBC)",
             "models": ["logistic_regression", "random_forest"],
             "seeds": CONFIG["seeds"],
             "split": "60% train / 20% validation / 20% held-out test, stratified",

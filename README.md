@@ -13,7 +13,7 @@ FastAPI REST API
         ↓
 Prediction and EFTA services
         ↓
-Preserved ml/ implementation: data_loader → calibrated model → G1/G2/G3
+Dataset foundation → calibrated model → G1/G2/G3
         ↓
 Structured prediction, gate, explanation, and decision response
 ```
@@ -44,7 +44,13 @@ EFTA/
 │   └── vite.config.js
 ├── ml/
 │   ├── config.py
-│   ├── data_loader.py
+│   ├── data/
+│   │   ├── unified_interface.py
+│   │   ├── split_protocol.py
+│   │   ├── dataset_registry.py
+│   │   ├── synthetic_dataset.py
+│   │   ├── heart_disease_loader.py
+│   │   └── wdbc_loader.py
 │   ├── models.py
 │   ├── gates.py
 │   ├── experiments.py
@@ -110,11 +116,13 @@ Optional threshold fields (`confidence_threshold`, `faithfulness_drop_threshold`
 
 ## How EFTA is invoked
 
-`backend/app/services/model_service.py` loads the original `ml/data_loader.py`, fits the original calibrated model from `ml/models.py` using seed 40, and applies the original training-only scaler to raw HTTP features. `backend/app/services/efta_service.py` calls the original `ml/gates.py` functions for G1 local uncertainty, G2 top-k masking faithfulness, G3 noisy explanation stability, and conjunction decision logic. No prediction is hard-coded or simulated by the UI.
+`backend/app/services/model_service.py` loads WDBC through `ml/data/unified_interface.py`, prepares its 60/20/20 split through `get_prepared_splits()` using seed 40, and applies that training-fitted preprocessing pipeline to raw HTTP features. `backend/app/services/efta_service.py` calls the original `ml/gates.py` functions for G1 local uncertainty, G2 top-k masking faithfulness, G3 noisy explanation stability, and conjunction decision logic. No prediction is hard-coded or simulated by the UI.
+
+Primary explanations are model-specific: `LinearExplainer` for Logistic Regression and `TreeExplainer` for Random Forest, implemented in `ml/explanations.py`. Permutation importance is available only as a global sanity check; LIME is not a required dependency. SHAP values are normalized to the prepared feature order and explain class 1, preserving the existing G2 methodology.
 
 The dataset semantics are explicit: class 0 is malignant and class 1 is benign. The preserved EFTA G2 methodology defines its explanation target as class 1, because the original helper and SHAP fallback evaluate `predict_proba()[:, 1]`; this is preserved rather than silently redefining the research gate. The API therefore returns `malignant_probability`, `benign_probability`, and `probability` (the predicted-class probability) separately. `confidence` is always the highest class probability, so it matches `probability` for the predicted class.
 
-The dashboard labels the 30 inputs with the actual `load_breast_cancer().feature_names` values. The “Load sample” action uses a real 30-value example-shaped vector in the dataset’s raw units; it is not a fake API response.
+The dashboard labels the 30 inputs with the actual WDBC feature names. The “Load sample” action uses a real 30-value example-shaped vector in the dataset’s raw units; it is not a fake API response.
 
 ## Original experiment suite
 
@@ -129,6 +137,32 @@ python experiments.py
 The full experiment writes `ml/results/raw_results.csv` and `ml/results/comparison_table.md`.
 
 The dashboard’s **Experiment protocol** view loads those files through `GET /api/experiments`. It displays the actual two-model, ten-seed summary, protocol metadata, and a limited raw-results table. The generated batch output contains coverage, selective error, accuracy, and unsupported release rate under clean and simulated shift conditions. It does not contain dataset-level G1/G2/G3 gate counts; the UI explicitly keeps those gate results at the individual-case prediction scope.
+
+## Datasets
+
+Three datasets back the EFTA research pipeline. Each is exposed through the
+same interface, `load_dataset(dataset_id)`, and prepared through
+`get_prepared_splits()`, which performs the stratified 60/20/20 split and fits
+imputation/scaling on the training split only.
+
+| Dataset | Role | Samples | Features | Target | Limitation |
+|---|---|---:|---:|---|---|
+| Synthetic known-mechanism data | Construct-validity test | 900 | 10 (3 causal, 7 noise) | Binary, nonlinear mechanism | Not clinical data; validates explanation recovery only |
+| UCI Heart Disease (Cleveland) | Healthcare benchmark 1 | 303 | 13 | Raw `num` 0-4 mapped to 0/1 | Small, 1980s, single-site, known data-quality issues |
+| WDBC | Healthcare benchmark 2 | 569 | 30 | 0 = malignant, 1 = benign | Diagnostic benchmark with no demographic fields for a real subgroup audit |
+
+Complete metadata and limitations are recorded in
+`ml/data/dataset_registry.py` and `ml/data/dataset_manifest.yaml`. Heart
+Disease loading uses the official Cleveland subset through `ucimlrepo`; if
+the network is unavailable, place the documented raw CSV in
+`ml/data/cache/heart_disease_cleveland_raw.csv`.
+
+Run the dataset audit and tests with:
+
+```bash
+python -m ml.data.audit
+pytest ml/tests/test_datasets.py -v
+```
 
 ## Validation performed
 

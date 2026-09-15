@@ -10,24 +10,64 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+
+try:
+    from .config import CONFIG
+except ImportError:  # Support execution from the ml directory.
+    from config import CONFIG
+
+LOGISTIC_REGRESSION_CONFIG = {
+    "C": CONFIG["logistic_regression_C"],
+    "max_iter": CONFIG["logistic_regression_max_iter"],
+    "random_state": CONFIG["model_random_state"],
+}
+RANDOM_FOREST_CONFIG = {
+    "n_estimators": CONFIG["random_forest_trees"],
+    "n_jobs": -1,
+    "random_state": CONFIG["model_random_state"],
+}
+RANDOM_FOREST_IMBALANCE_RATIO_THRESHOLD = CONFIG[
+    "random_forest_imbalance_ratio_threshold"
+]
 
 
-def build_base_pipeline(model_name: str = "logistic_regression") -> Pipeline:
-    """Build a scaler-plus-classifier pipeline.
+def requires_feature_scaling(model_name: str) -> bool:
+    if model_name == "logistic_regression":
+        return True
+    if model_name == "random_forest":
+        return False
+    raise ValueError("model_name must be 'logistic_regression' or 'random_forest'.")
 
-    The scaler is retained inside the pipeline so future raw-feature inference
-    cannot accidentally bypass the same training transformation.
+
+def random_forest_class_weight(y_train: np.ndarray) -> str | None:
+    """Use balanced weighting only when the training split is meaningfully imbalanced."""
+    labels, counts = np.unique(np.asarray(y_train, dtype=int), return_counts=True)
+    if len(labels) < 2 or np.min(counts) == 0:
+        raise ValueError("y_train must contain both classes for binary classification.")
+    imbalance_ratio = float(np.max(counts) / np.min(counts))
+    return "balanced" if imbalance_ratio >= RANDOM_FOREST_IMBALANCE_RATIO_THRESHOLD else None
+
+
+def build_base_pipeline(
+    model_name: str = "logistic_regression", y_train: np.ndarray | None = None
+) -> Pipeline:
+    """Build a classifier pipeline for already-prepared feature arrays.
+
+    Random Forest class weighting is selected from training labels only. If
+    labels are omitted, no weighting is applied so callers cannot accidentally
+    tune it using validation or test data.
     """
     if model_name == "logistic_regression":
-        classifier = LogisticRegression(max_iter=2000, random_state=0)
+        classifier = LogisticRegression(**LOGISTIC_REGRESSION_CONFIG)
     elif model_name == "random_forest":
+        class_weight = random_forest_class_weight(y_train) if y_train is not None else None
         classifier = RandomForestClassifier(
-            n_estimators=300, n_jobs=-1, random_state=0, class_weight="balanced"
+            **RANDOM_FOREST_CONFIG,
+            class_weight=class_weight,
         )
     else:
         raise ValueError("model_name must be 'logistic_regression' or 'random_forest'.")
-    return Pipeline([("scaler", StandardScaler()), ("classifier", classifier)])
+    return Pipeline([("classifier", classifier)])
 
 
 def fit_calibrated_model(
@@ -42,7 +82,7 @@ def fit_calibrated_model(
     ``cv='prefit'`` is used intentionally: validation is the calibration set,
     and therefore must not be mixed into base-model fitting.
     """
-    base = build_base_pipeline(model_name)
+    base = build_base_pipeline(model_name, y_train=y_train)
     base.fit(X_train, y_train)
     # scikit-learn 1.6 replaced the deprecated ``cv='prefit'`` spelling with
     # FrozenEstimator. Keep a compatibility branch so the same code also runs

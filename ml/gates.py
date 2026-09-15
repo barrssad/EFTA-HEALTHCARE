@@ -6,7 +6,10 @@ from typing import Any, Callable
 
 import numpy as np
 
-from config import CONFIG
+try:
+    from .config import CONFIG
+except ImportError:  # Support execution from the ml directory.
+    from config import CONFIG
 
 
 def _target_probability(model: Any, X: np.ndarray, target_class: int = 1) -> float:
@@ -54,33 +57,18 @@ def gate_g2_faithfulness(
     return int(drop >= drop_threshold), float(drop)
 
 
-def default_shap_explainer(model: Any, background: np.ndarray) -> Callable[[np.ndarray], np.ndarray]:
-    """Build a SHAP callable, with a model-agnostic fallback if SHAP is absent."""
+def default_shap_explainer(
+    model: Any,
+    background: np.ndarray,
+    feature_names: list[str] | None = None,
+) -> Callable[[np.ndarray], np.ndarray]:
+    """Build the model-specific primary SHAP explainer for class 1."""
     try:
-        import shap
+        from .explanations import build_shap_explainer
+    except ImportError:  # Support execution from the ml directory.
+        from explanations import build_shap_explainer
 
-        explainer = shap.Explainer(model.predict_proba, background)
-
-        def explain(X: np.ndarray) -> np.ndarray:
-            values = explainer(np.asarray(X))
-            raw = values.values
-            if raw.ndim == 3:
-                raw = raw[:, :, 1]
-            return np.asarray(raw, dtype=float)
-
-        return explain
-    except (ImportError, AttributeError, TypeError):
-        # Deterministic model-agnostic fallback keeps the repository runnable
-        # with standard Colab packages when SHAP is not installed.
-        def explain(X: np.ndarray) -> np.ndarray:
-            X = np.asarray(X, dtype=float)
-            baseline = np.asarray(background).mean(axis=0)
-            # Keep the original EFTA explanation target explicit: class 1.
-            scores = np.asarray(model.predict_proba(X)[:, 1])
-            sensitivity = np.abs(X - baseline)
-            return sensitivity * scores[:, None]
-
-        return explain
+    return build_shap_explainer(model, background, feature_names=feature_names)
 
 
 def gate_g3_stability(

@@ -10,9 +10,10 @@ import pandas as pd
 from sklearn.metrics import accuracy_score
 
 from config import CONFIG
-from data_loader import load_and_split
+from data.unified_interface import load_dataset
+from data.split_protocol import get_prepared_splits
 from gates import default_shap_explainer, efta_decision, gate_g1_local_uncertainty
-from models import fit_calibrated_model, gate_g0_metrics, gate_g5_subgroup_check
+from models import fit_calibrated_model, gate_g0_metrics, gate_g5_subgroup_check, requires_feature_scaling
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "results"
 
@@ -65,7 +66,10 @@ def _evaluate_predictions(
 
 
 def run_one_seed(seed: int, model_name: str) -> list[dict[str, Any]]:
-    splits = load_and_split(seed)
+    bundle = load_dataset("wdbc", seed=seed)
+    splits = get_prepared_splits(
+        bundle, seed=seed, scale_features=requires_feature_scaling(model_name)
+    )
     model = fit_calibrated_model(
         model_name, splits.X_train, splits.y_train, splits.X_val, splits.y_val
     )

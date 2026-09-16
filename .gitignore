@@ -28,3 +28,25 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+# Local environments and generated runtime files
+.venv/
+backend/.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+
+.venv/
+backend/.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+frontend/node_modules/
+ml/results/artifacts/
+ml/results/confirmatory_v2/
+ml/results/smoke/
+frontend/node_modules/
+ml/results/artifacts/
+ml/results/confirmatory_v2/
+ml/results/smoke/

@@ -1,0 +1,57 @@
+# Frozen EFTA protocol configuration. Source runtime values: ml/config.py.
+# This file is declarative and does not override runtime code.
+protocol_version: part10_freeze_v1
+project_title: "Evaluation Before Trust: A Non-Compensatory Gate Architecture for Healthcare XAI Under Distribution Shift"
+execution:
+  confirmatory_mode: "not_run"
+  pilot_mode: "smoke_only"
+  python_minimum: "3.10"
+seeds: [40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
+split:
+  train: 0.60
+  validation: 0.20
+  test: 0.20
+  stratified: true
+  preprocessing_fit_split: train_only
+coverage:
+  target: 0.70
+  tolerance: 0.05
+explanations:
+  top_k_features: 3
+  perturbation_noise: 0.05
+  num_perturbations: 20
+  confidence_threshold: 0.80
+  faithfulness_drop_threshold: 0.20
+  stability_threshold: 0.70
+model_gates:
+  g0_min_auroc: 0.60
+  g4_degradation_threshold: 0.05
+models:
+  - logistic_regression
+  - random_forest
+model_parameters:
+  random_forest_trees: 300
+  logistic_regression_C: 1.0
+  logistic_regression_max_iter: 2000
+  model_random_state: 0
+  random_forest_imbalance_ratio_threshold: 1.5
+datasets:
+  - synthetic
+  - heart_disease
+  - wdbc
+policies:
+  - b0_accuracy_only
+  - b1_confidence_only
+  - b2_weighted_index
+  - efta
+shifts:
+  measurement_noise: [0.1, 0.2]
+  missingness: [0.1, 0.2]
+  prevalence_shift: [0.70]
+  subgroup: [age_if_available]
+statistics:
+  unit: paired_seed
+  primary_comparisons: [EFTA_vs_B1, EFTA_vs_B2]
+  secondary_fdr: benjamini_hochberg
+  validation_test_separation: true
+hypotheses: [H1, H2, H3]

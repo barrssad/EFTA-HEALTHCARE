@@ -1,0 +1,55 @@
+{
+  "repair_id": "tree_additivity_check_v1",
+  "repair_type": "SHAP compatibility repair",
+  "status": "implemented_validated_not_yet_rerun",
+  "date": "2026-09-16",
+  "failure_context": {
+    "component": "Random Forest TreeExplainer",
+    "package": "shap",
+    "version": "0.46.0",
+    "error": "shap.utils._exceptions.ExplainerError: Additivity check failed in TreeExplainer",
+    "location": "ml/explanations.py:ShapExplanation.__call__",
+    "observed_during": "frozen confirmatory run",
+    "confirmatory_rerun_completed": false
+  },
+  "repair": {
+    "file": "ml/explanations.py",
+    "behavior": "Pass check_additivity=False only when invoking TreeExplainer.",
+    "scope": "Explainer-library numerical assertion only; attribution method and downstream metrics are unchanged.",
+    "version_constant": "SHAP_COMPATIBILITY_REPAIR_VERSION = tree_additivity_check_v1"
+  },
+  "scientific_protocol_unchanged": {
+    "gates_g0_g5": true,
+    "policies_b0_b1_b2_efta": true,
+    "datasets": true,
+    "models": true,
+    "seeds": true,
+    "split_ratios": true,
+    "target_coverage": true,
+    "coverage_tolerance": true,
+    "threshold_grids": true,
+    "faithfulness_definition": true,
+    "stability_definition": true,
+    "shift_definitions": true,
+    "part8_statistics": true,
+    "hypotheses_h1_h2_h3": true,
+    "validation_test_separation": true
+  },
+  "validation": {
+    "command": "python -m pytest ml/tests/test_explanations.py -q",
+    "result": "11 passed, 5 skipped",
+    "regression_test": "ml/tests/test_explanations.py::test_tree_explainer_compatibility_repair_disables_only_additivity_check",
+    "full_confirmatory_experiment_run": false
+  },
+  "rerun_policy": {
+    "required": true,
+    "affected_design": "The affected frozen confirmatory design must be rerun; no selective outcome repair is permitted.",
+    "result_interpretation": "Results generated before this repair are not confirmatory evidence for the affected design."
+  },
+  "provenance": {
+    "source_file": "ml/explanations.py",
+    "test_file": "ml/tests/test_explanations.py",
+    "freeze_manifest": "freeze/freeze_manifest.json",
+    "checksum_manifest": "freeze/checksums.sha256"
+  }
+}

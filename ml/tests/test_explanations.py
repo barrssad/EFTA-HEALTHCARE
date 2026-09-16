@@ -8,6 +8,8 @@ import pytest
 from ml.data.split_protocol import get_prepared_splits
 from ml.data.unified_interface import VALID_DATASET_IDS, load_dataset
 from ml.explanations import (
+    SHAP_COMPATIBILITY_REPAIR_VERSION,
+    ShapExplanation,
     build_shap_explainer,
     global_shap_summary,
     permutation_importance_summary,
@@ -20,6 +22,24 @@ EXPECTED_CLASSES = {
     "heart_disease": ["no_disease", "disease_present"],
     "wdbc": ["malignant", "benign"],
 }
+
+
+def test_tree_explainer_compatibility_repair_disables_only_additivity_check() -> None:
+    calls = []
+
+    class FakeTreeExplainer:
+        def __call__(self, X, **kwargs):
+            calls.append(kwargs)
+            return np.zeros((len(X), 2))
+
+    adapter = ShapExplanation(
+        FakeTreeExplainer(), "TreeExplainer", ["feature_0", "feature_1"]
+    )
+    values = adapter(np.ones((1, 2)))
+
+    assert SHAP_COMPATIBILITY_REPAIR_VERSION == "tree_additivity_check_v1"
+    assert calls == [{"check_additivity": False}]
+    assert values.shape == (1, 2)
 
 
 def _load_bundle(dataset_id: str):

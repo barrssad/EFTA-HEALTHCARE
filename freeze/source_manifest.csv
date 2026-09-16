@@ -1,0 +1,11 @@
+path,role,protocol_relevance,sha256_source
+ml/config.py,central runtime configuration,protocol values,see freeze/checksums.sha256
+ml/data/split_protocol.py,train-validation-test split and preprocessing,60/20/20 leakage control,see freeze/checksums.sha256
+ml/data/dataset_registry.py,dataset metadata,source and limitation record,see freeze/checksums.sha256
+ml/data/dataset_manifest.yaml,machine-readable dataset metadata,dataset provenance,see freeze/checksums.sha256
+ml/experiments.py,experiment orchestration,model policy shift and result generation,see freeze/checksums.sha256
+ml/gates.py,gate definitions,G0-G5,see freeze/checksums.sha256
+ml/policies.py,release policies,B0/B1/B2/EFTA,see freeze/checksums.sha256
+ml/metrics.py,metric definitions,predictive selective and explanation metrics,see freeze/checksums.sha256
+ml/statistics.py,paired seed statistics,Part 8 analysis,see freeze/checksums.sha256
+ml/result_tables.py,result export,raw and summary provenance,see freeze/checksums.sha256

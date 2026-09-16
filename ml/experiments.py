@@ -39,6 +39,16 @@ try:
         table2_metrics,
         table3_gate_ablation,
     )
+    from .reproducibility import (
+        CheckpointStore,
+        build_run_manifest,
+        environment_snapshot,
+        save_json,
+        save_split_manifest,
+        sha256_json,
+        input_artifact_paths,
+        write_checksum_manifest,
+    )
 except ImportError:  # Support execution from the ml directory.
     import shifts
     from config import CONFIG
@@ -49,6 +59,7 @@ except ImportError:  # Support execution from the ml directory.
     from models import fit_calibrated_model, gate_g0_metrics, requires_feature_scaling
     from policies import CaseEvidence, apply_policy, fit_b1_calibration, fit_b2_calibration
     from result_tables import ResultContext, architecture_decision_data, export_table, risk_coverage_data, table1_design, table2_metrics, table3_gate_ablation
+    from reproducibility import CheckpointStore, build_run_manifest, environment_snapshot, input_artifact_paths, save_json, save_split_manifest, sha256_json, write_checksum_manifest
 
 
 LOGGER = logging.getLogger(__name__)
@@ -220,7 +231,16 @@ def _blocked_rows(dataset_id: str, model_name: str, seed: int, reason: str) -> p
     return pd.DataFrame(rows)
 
 
-def run_one_seed(seed: int, model_name: str, dataset_id: str = "wdbc") -> pd.DataFrame:
+def run_one_seed(
+    seed: int,
+    model_name: str,
+    dataset_id: str = "wdbc",
+    *,
+    split_manifest_dir: str | Path | None = None,
+    execution_mode: str = "full",
+    run_id: str = "default",
+    repair_version: str | None = None,
+) -> pd.DataFrame:
     """Run one dataset/model/seed without tuning on held-out test data."""
     try:
         bundle = load_dataset(dataset_id, seed=seed)
@@ -235,6 +255,19 @@ def run_one_seed(seed: int, model_name: str, dataset_id: str = "wdbc") -> pd.Dat
         scale_features=requires_feature_scaling(model_name),
         force_imputation=True,
     )
+    if split_manifest_dir is not None:
+        save_split_manifest(
+            dataset=dataset_id,
+            seed=seed,
+            train_indices=splits.train_indices,
+            val_indices=splits.val_indices,
+            test_indices=splits.test_indices,
+            destination=Path(split_manifest_dir) / f"{dataset_id}__seed_{seed}.json",
+            configuration_hash=sha256_json(CONFIG),
+            execution_mode=execution_mode,
+            run_id=run_id,
+            repair_version=repair_version,
+        )
     model = fit_calibrated_model(
         model_name, splits.X_train, splits.y_train, splits.X_val, splits.y_val
     )
@@ -450,10 +483,54 @@ def run_one_seed(seed: int, model_name: str, dataset_id: str = "wdbc") -> pd.Dat
 
 
 def run_experiments(
-    model_names: tuple[str, ...] = ("logistic_regression", "random_forest")
+    model_names: tuple[str, ...] = ("logistic_regression", "random_forest"),
+    *,
+    execution_mode: str = "full",
+    run_id: str | None = None,
+    repair_version: str | None = None,
+    output_dir: str | Path | None = None,
+    checkpoint_dir: str | Path | None = None,
+    resume: bool = False,
+    manifest_path: str | Path | None = None,
 ) -> pd.DataFrame:
     """Run configured seeds and export all Process 7 result artifacts."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    run_output_dir = Path(output_dir) if output_dir is not None else OUTPUT_DIR
+    resolved_run_id = run_id or execution_mode
+    run_output_dir.mkdir(parents=True, exist_ok=True)
+    configured_seeds = tuple(int(seed) for seed in CONFIG["seeds"])
+    artifact_dir = run_output_dir / "artifacts"
+    environment_path = artifact_dir / f"environment_{execution_mode}.json"
+    resolved_manifest_path = Path(manifest_path) if manifest_path else artifact_dir / f"run_manifest_{execution_mode}.json"
+    planned_outputs = [
+        run_output_dir / "raw_case_level.csv",
+        run_output_dir / "table1_design.csv",
+        run_output_dir / "table2_metrics.csv",
+        run_output_dir / "table3_gate_ablation.csv",
+        run_output_dir / "risk_coverage_data.csv",
+        run_output_dir / "architecture_decision_data.csv",
+    ]
+    environment = environment_snapshot(execution_mode=execution_mode, seeds=configured_seeds)
+    manifest = build_run_manifest(
+        dataset_ids=DATASETS,
+        model_names=model_names,
+        seeds=configured_seeds,
+        execution_mode=execution_mode,
+        output_paths=planned_outputs,
+        environment=environment,
+    )
+    save_json(environment, environment_path)
+    save_json(manifest, resolved_manifest_path)
+    checkpoint_store = (
+        CheckpointStore(
+            checkpoint_dir,
+            manifest["configuration_hash"],
+            execution_mode=execution_mode,
+            run_id=resolved_run_id,
+            repair_version=repair_version,
+        )
+        if checkpoint_dir is not None
+        else None
+    )
     frames: list[pd.DataFrame] = []
     metric_tables: list[pd.DataFrame] = []
     gate_tables: list[pd.DataFrame] = []
@@ -479,8 +556,29 @@ def run_experiments(
                     "config_id": "process7_v1",
                 }
             )
-            for seed in CONFIG["seeds"]:
-                frame = run_one_seed(seed, model_name, dataset_id)
+            for seed in configured_seeds:
+                frame = (
+                    checkpoint_store.load_verified(dataset_id, model_name, seed)
+                    if checkpoint_store is not None and resume
+                    else None
+                )
+                if frame is None:
+                    split_manifest_dir = (
+                        Path(checkpoint_dir).parent / "splits"
+                        if checkpoint_dir is not None
+                        else None
+                    )
+                    frame = run_one_seed(
+                        seed,
+                        model_name,
+                        dataset_id,
+                        split_manifest_dir=split_manifest_dir,
+                        execution_mode=execution_mode,
+                        run_id=resolved_run_id,
+                        repair_version=repair_version,
+                    )
+                    if checkpoint_store is not None and not frame.empty:
+                        checkpoint_store.save_completed(dataset_id, model_name, seed, frame)
                 if frame.empty:
                     continue
                 frames.append(frame)
@@ -489,24 +587,33 @@ def run_experiments(
                 risk_tables.extend(frame.attrs.get("risk_tables", []))
                 architecture_tables.append(frame.attrs["architecture_table"])
     raw = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-    export_table(raw, OUTPUT_DIR / "raw_case_level.csv")
-    export_table(table1_design(design_rows), OUTPUT_DIR / "table1_design.csv")
+    export_table(raw, run_output_dir / "raw_case_level.csv")
+    export_table(table1_design(design_rows), run_output_dir / "table1_design.csv")
     export_table(
         pd.concat(metric_tables, ignore_index=True) if metric_tables else pd.DataFrame(),
-        OUTPUT_DIR / "table2_metrics.csv",
+        run_output_dir / "table2_metrics.csv",
     )
     export_table(
         pd.concat(gate_tables, ignore_index=True) if gate_tables else pd.DataFrame(),
-        OUTPUT_DIR / "table3_gate_ablation.csv",
+        run_output_dir / "table3_gate_ablation.csv",
     )
     export_table(
         pd.concat(risk_tables, ignore_index=True) if risk_tables else pd.DataFrame(),
-        OUTPUT_DIR / "risk_coverage_data.csv",
+        run_output_dir / "risk_coverage_data.csv",
     )
     export_table(
         pd.concat(architecture_tables, ignore_index=True) if architecture_tables else pd.DataFrame(),
-        OUTPUT_DIR / "architecture_decision_data.csv",
+        run_output_dir / "architecture_decision_data.csv",
     )
+    artifact_paths = [
+        environment_path,
+        resolved_manifest_path,
+        *planned_outputs,
+        *input_artifact_paths(),
+        *((Path(checkpoint_dir).parent / "splits").glob("*") if checkpoint_dir is not None else []),
+    ]
+    checksum_path = artifact_dir / f"checksums_{execution_mode}.sha256"
+    write_checksum_manifest([path for path in artifact_paths if Path(path).is_file()], checksum_path)
     return raw
 
 

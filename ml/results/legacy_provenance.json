@@ -1,0 +1,22 @@
+{
+  "files": [
+    {
+      "original_path": "ml/results/raw_results.csv",
+      "file_size": 12743,
+      "modification_time": "2026-09-16T13:05:47.0973614+05:30",
+      "sha256": "1383977fe9ef422f91e82d72d602f66261e9d40ee55ca3524b14d40c7982a3b3",
+      "classification": "unknown_legacy",
+      "reason": "missing execution mode, run ID, configuration hash, source version, and repair version",
+      "reused_in_confirmatory_v2": false
+    },
+    {
+      "original_path": "ml/results/comparison_table.md",
+      "file_size": 1498,
+      "modification_time": "2026-09-16T13:05:47.0973614+05:30",
+      "sha256": "0c646a241e159b45ae2e80edf88f25a6cf2d2c67922ed9ab6f3dd10dbcd60d15",
+      "classification": "unknown_legacy",
+      "reason": "missing execution mode, run ID, configuration hash, source version, and repair version",
+      "reused_in_confirmatory_v2": false
+    }
+  ]
+}

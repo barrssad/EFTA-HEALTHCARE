@@ -10,6 +10,9 @@ import pandas as pd
 from sklearn.inspection import permutation_importance
 
 
+SHAP_COMPATIBILITY_REPAIR_VERSION = "tree_additivity_check_v1"
+
+
 @dataclass
 class ShapExplanation:
     """Callable SHAP adapter with stable feature-shape semantics."""
@@ -26,7 +29,13 @@ class ShapExplanation:
         )
 
     def __call__(self, X: np.ndarray, target_class: int | None = None) -> np.ndarray:
-        values = self.explainer(np.asarray(X, dtype=float))
+        inputs = np.asarray(X, dtype=float)
+        if self.explainer_type == "TreeExplainer":
+            # SHAP 0.46 can reject numerically valid RF attributions on its
+            # internal additivity assertion; this does not alter the values.
+            values = self.explainer(inputs, check_additivity=False)
+        else:
+            values = self.explainer(inputs)
         raw = values.values if hasattr(values, "values") else values
         selected_class = target_class
         if selected_class is None:

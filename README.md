@@ -138,6 +138,80 @@ The full experiment writes `ml/results/raw_results.csv` and `ml/results/comparis
 
 The dashboard’s **Experiment protocol** view loads those files through `GET /api/experiments`. It displays the actual two-model, ten-seed summary, protocol metadata, and a limited raw-results table. The generated batch output contains coverage, selective error, accuracy, and unsupported release rate under clean and simulated shift conditions. It does not contain dataset-level G1/G2/G3 gate counts; the UI explicitly keeps those gate results at the individual-case prediction scope.
 
+## Reproducible Colab and smoke workflow
+
+The research protocol is CPU-first and does not require a GPU. The additive
+reproducibility utilities record Python/platform and scientific-package
+versions, repository commit when available, configured seeds, execution mode,
+configuration hash, and SHA-256 checksums for exported artifacts.
+
+Run the two-seed smoke check before any confirmatory run:
+
+```bash
+python -m ml.smoke_test
+```
+
+This uses only the first two existing prespecified seeds (`40` and `41`) for
+the existing WDBC/logistic-regression smoke path. It writes clearly labelled
+artifacts under `ml/results/smoke/`, including `execution_mode: smoke` in the
+environment and run manifest, raw results, per-seed checkpoints, and a
+checksum file. The smoke script reruns the first seed and compares its raw
+output for deterministic behavior.
+
+The full runner can optionally checkpoint one dataset/model/seed unit and
+resume only verified completed units. This does not change experiment
+definitions or thresholds:
+
+```python
+from ml.experiments import run_experiments
+
+run_experiments(
+        execution_mode="full",
+        output_dir="ml/results/confirmatory_v2",
+        checkpoint_dir="ml/results/checkpoints",
+        resume=True,
+)
+```
+
+For a repaired confirmatory rerun, use a new output directory such as
+`ml/results/confirmatory_v2` and a matching checkpoint directory. The runner
+will keep raw tables, manifests, and artifacts inside that directory instead
+of sharing the legacy `ml/results/` root.
+
+Corrupt, incomplete, or configuration-mismatched checkpoints are ignored and
+recomputed deterministically. Valid checkpoints are never silently overwritten.
+Raw per-seed frames remain separate from aggregated result tables.
+
+For a Colab run, install only the optional acquisition/explanation dependency
+when needed, capture the environment, run the smoke check, and preserve the
+entire `ml/results/` artifact directory. The smoke workflow is not a substitute
+for the frozen ten-seed confirmatory run, and this repository does not execute
+that final run automatically.
+
+## Part 10 scientific freeze
+
+The protocol-freeze package is maintained under `freeze/`. It contains the
+reviewable frozen configuration, preregistration, environment record, data and
+source manifests, AI-use log, checksum manifest, and explicit placeholders for
+raw results, summary tables, figures, manuscript files, and persistent splits.
+The only generated results currently retained are the two-seed pilot artifacts
+under `ml/results/smoke/`; they are labelled `execution_mode: smoke` and are not
+final research results.
+
+## Statistical analysis layer
+
+The statistical layer is intentionally built around the repeated-seed experiment unit rather than pooled case-level observations. Each dataset × model × scenario has 10 prespecified paired seeds. The primary comparison is therefore computed seed-by-seed, with EFTA and each baseline compared on the same split and the exact same test set. Coverage is matched within the configured tolerance around the target coverage of 0.70; the analysis records the realized coverage instead of silently forcing all methods to 0.70.
+
+- Primary outcome: accepted-case selective error at matched coverage.
+- Primary comparisons: EFTA vs B1 for H1/H3 and EFTA vs B2 for H2.
+- Paired method: seed-level differences and Wilcoxon signed-rank tests, with the number of usable pairs reported explicitly.
+- Effect size: paired mean difference and median difference, plus a bootstrap 95% interval over paired seeds only.
+- Multiple-comparison handling: BH-FDR only for defined secondary families; primary analyses remain separate from exploratory analyses.
+- Shift interpretation: deterioration is computed as shifted selective error minus clean selective error, then compared scenario-matched and seed-paired rather than pooled across cases.
+- Failure safety: undefined metrics remain NaN with an explicit status/reason rather than being silently replaced with zero.
+
+This layer is designed for the frozen experimental protocol and does not tune thresholds on the held-out test data.
+
 ## Datasets
 
 Three datasets back the EFTA research pipeline. Each is exposed through the

@@ -1,0 +1,4 @@
+dataset_id,name,loader,source,source_url,version_or_revision,license,notes
+synthetic,Synthetic Known-Mechanism Tabular Data,ml/data/synthetic_dataset.py,generated in repository,n/a,generator v1 fixed seed,n/a,deterministic from sample count and seed
+heart_disease,UCI Heart Disease Cleveland,ml/data/heart_disease_loader.py,UCI Machine Learning Repository,https://archive.ics.uci.edu/dataset/45/heart+disease,unknown/TODO,unknown/TODO,Cleveland subset only; local cache may be required
+wdbc,Wisconsin Diagnostic Breast Cancer,ml/data/wdbc_loader.py,scikit-learn packaged dataset,https://scikit-learn.org/stable/datasets/toy_dataset.html,installed scikit-learn release,CC BY 4.0,569 samples and 30 features

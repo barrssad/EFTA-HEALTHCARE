@@ -66,7 +66,7 @@ def test_benign_prediction_has_consistent_probabilities_and_g1():
     assert result["gates"]["G1"]["passed"] is True
 
 
-def test_g2_preserves_class_1_benign_target_methodology():
+def test_g2_uses_predicted_class_by_default_and_supports_explicit_target():
     model = FakeModel()
     patient = np.array([2.0] + [0.0] * 29)
     shap_values = np.zeros(30)
@@ -79,8 +79,14 @@ def test_g2_preserves_class_1_benign_target_methodology():
     malignant_gate, malignant_drop = gate_g2_faithfulness(
         model, malignant_patient, shap_values, np.zeros(30), 3, 0.2
     )
-    assert malignant_gate == 0
-    assert malignant_drop < 0.0
+    assert malignant_gate == 1
+    assert malignant_drop >= 0.2
+
+    explicit_gate, explicit_drop = gate_g2_faithfulness(
+        model, malignant_patient, shap_values, np.zeros(30), 3, 0.2, target_class=1
+    )
+    assert explicit_gate == 0
+    assert explicit_drop < 0.0
 
 
 def test_request_rejects_non_30_feature_vectors():

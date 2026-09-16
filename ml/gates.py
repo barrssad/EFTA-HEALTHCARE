@@ -12,15 +12,11 @@ except ImportError:  # Support execution from the ml directory.
     from config import CONFIG
 
 
-def _target_probability(model: Any, X: np.ndarray, target_class: int = 1) -> float:
-    """Return the probability for the EFTA explanation target class.
-
-    The validated research implementation defines ``positive`` as dataset
-    class 1. For this dataset, class 1 is benign; this is intentionally not
-    silently changed to malignant merely because class 0 is the clinical
-    condition of interest.
-    """
-    return float(model.predict_proba(np.asarray(X).reshape(1, -1))[0, target_class])
+def _target_probability(model: Any, X: np.ndarray, target_class: int | None = None) -> float:
+    """Return the probability for the predicted class unless explicitly supplied."""
+    probabilities = model.predict_proba(np.asarray(X).reshape(1, -1))[0]
+    selected_class = int(np.argmax(probabilities)) if target_class is None else int(target_class)
+    return float(probabilities[selected_class])
 
 
 def gate_g1_local_uncertainty(
@@ -44,9 +40,9 @@ def gate_g2_faithfulness(
     dataset_means: np.ndarray,
     top_k: int,
     drop_threshold: float = 0.20,
-    target_class: int = 1,
+    target_class: int | None = None,
 ) -> tuple[int, float]:
-    """Mask top-k features and test the class-1 (benign) target probability drop."""
+    """Mask top-k features and test the predicted-class probability drop."""
     patient = np.asarray(patient_profile, dtype=float).reshape(-1)
     means = np.asarray(dataset_means, dtype=float).reshape(-1)
     original = _target_probability(model, patient, target_class)
@@ -56,6 +52,13 @@ def gate_g2_faithfulness(
     drop = original - masked_probability
     return int(drop >= drop_threshold), float(drop)
 
+def gate_g4_shift_robustness(
+    clean_selective_error: float,
+    shifted_selective_error: float,
+    degradation_threshold: float,
+) -> int:
+    """Pass when shifted selective error does not degrade beyond the threshold."""
+    return int((float(shifted_selective_error) - float(clean_selective_error)) <= float(degradation_threshold))
 
 def default_shap_explainer(
     model: Any,

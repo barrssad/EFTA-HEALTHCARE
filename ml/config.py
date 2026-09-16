@@ -15,6 +15,10 @@ CONFIG = {
     "logistic_regression_max_iter": 2000,
     "model_random_state": 0,
     "random_forest_imbalance_ratio_threshold": 1.5,
+    # Placeholder: confirm with the supervisor before confirmatory runs.
+    "g0_min_auroc": 0.60,
+    # Placeholder: confirm with the supervisor before confirmatory runs.
+    "g4_degradation_threshold": 0.05,
 }
 
 if __name__ == "__main__":

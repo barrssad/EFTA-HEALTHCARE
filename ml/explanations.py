@@ -12,21 +12,31 @@ from sklearn.inspection import permutation_importance
 
 @dataclass
 class ShapExplanation:
-    """Callable SHAP adapter with stable class-1 and feature-shape semantics."""
+    """Callable SHAP adapter with stable feature-shape semantics."""
 
     explainer: Any
     explainer_type: str
     feature_names: list[str]
-    target_class: int = 1
+    target_class: int | None = None
 
-    def __call__(self, X: np.ndarray) -> np.ndarray:
+    def for_target_class(self, target_class: int | None) -> "ShapExplanation":
+        """Return a view selecting one class for list or 3-D SHAP outputs."""
+        return ShapExplanation(
+            self.explainer, self.explainer_type, self.feature_names, target_class
+        )
+
+    def __call__(self, X: np.ndarray, target_class: int | None = None) -> np.ndarray:
         values = self.explainer(np.asarray(X, dtype=float))
         raw = values.values if hasattr(values, "values") else values
+        selected_class = target_class
+        if selected_class is None:
+            selected_class = self.target_class
+        selected_class = 1 if selected_class is None else int(selected_class)
         if isinstance(raw, list):
-            raw = raw[self.target_class]
+            raw = raw[selected_class]
         raw = np.asarray(raw, dtype=float)
         if raw.ndim == 3:
-            raw = raw[:, :, self.target_class]
+            raw = raw[:, :, selected_class]
         if raw.ndim == 1:
             raw = raw.reshape(1, -1)
         expected_shape = (len(np.asarray(X)), len(self.feature_names))
